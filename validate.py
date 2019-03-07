@@ -38,9 +38,6 @@ def isValidIp(domain_name):
         return (False, None)
 
 
-#def isValidServer():
-    
-
 def main():
 
     email_final = ""
