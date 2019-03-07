@@ -4,7 +4,7 @@ emails using PyDNS.
 """
 import re 
 import smtplib 
-import dns.resolver
+import DNS
 import socket 
 import sys
 
@@ -29,10 +29,13 @@ def isValidEmail(email):
     else:
         return False 
 
-def isValidIp(hostname):
+def isValidIp(domain_name):
     """ Check if the hostname is valid, and if it is get mx_record """
-    mx_records = DNS.resolver.query(hostname, 'MX')
-    return (True, mx_records)
+    try:
+        mx_records = DNS.mxlookup(domain_name)
+        return (True, mx_records)
+    except InvalidServerError:
+        return (False, None)
 
 
 #def isValidServer():
@@ -41,6 +44,7 @@ def isValidIp(hostname):
 def main():
 
     email_final = ""
+    timeout = 5000
 
     while (True):
         try:
@@ -55,40 +59,59 @@ def main():
             continue 
     
     split_email = email_final.split('@')
-    hostname = str(split_email[1])
+    domain_name = str(split_email[1])
 
-    mx_record = isValidIp(hostname)
+    InvalidServerError = DNS.ServerError
+
+    mx_record = isValidIp(domain_name)
+
     if not mx_record[0]:
-        print("Invalid Hostname")
+        print("Invalid Hostname, please try again.")
         sys.exit()
-    else:
-        print(mx_record[1])
+
+    mx_domain = mx_record[1][0][1]
+    print(mx_domain)
 
 
+    hostname = socket.gethostname()
+
+    try:
+
+        smtp = smtplib.SMTP(timeout=timeout)
+        smtp.connect(mx_domain)
+        response_helo = smtp.helo(hostname)
+
+        if (response_helo[0] != 250):
+            smtp.quit()
+            print("HELO failed with status code: " + response_helo[0])
+            sys.exit()
+
+        response_mail = smtp.mail('none@fakedomain.com')
+
+        if (response_mail[0] != 250):
+            smtp.quit()
+            print("MAIL faile with status code: " + response_mail[0])
+            sys.exit()
+        smtp.quit()
+
+        assert response_helo[0] == 250 and response_mail[0] == 250
+
+        print("Email is valid!")
+        sys.exit()
+
+    except smtplib.SMTPServerDisconnected:
+        print("SMTP Server Disconnected!")
+        sys.exit()
+
+    except smtplib.SMTPConnectError:
+        print("Failed to Connect to SMTP Server!")
+        sys.exit()
     
-
-
+    except socket.error as e:
+        print("Socket error, could not get hostname!")
+        print(e)
+        sys.exit()
     
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 if __name__ == "__main__":
     main()
